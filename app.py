@@ -2,27 +2,46 @@
 
 import streamlit as st
 
-from config.settings import get_settings
+from config.settings import ConfigurationError, get_settings
+from database.health import check_database_connection
 
 
 def main() -> None:
     """Render the Knowledge Hub application shell."""
 
-    settings = get_settings()
-
     st.set_page_config(
-        page_title=settings.app_name,
+        page_title="Knowledge Hub",
         page_icon="📚",
         layout="wide",
         initial_sidebar_state="expanded",
     )
 
+    try:
+        settings = get_settings()
+    except ConfigurationError:
+        st.error(
+            "Application configuration is incomplete. "
+            "Check the local Streamlit secrets configuration."
+        )
+        st.stop()
+
     st.title("📚 Knowledge Hub")
     st.caption(settings.phase)
 
+    st.success("Application configuration loaded successfully.")
+
+    if check_database_connection():
+        st.success("Supabase database connection verified.")
+    else:
+        st.error(
+            "Unable to connect to the application database. "
+            "Check the Supabase configuration."
+        )
+        st.stop()
+
     st.info(
-        "Application foundation loaded successfully. "
-        "Authentication has not yet been configured."
+        "Supabase credentials are configured. "
+        "Database connectivity will be verified in the next checkpoint."
     )
 
     st.subheader("Phase 1")
@@ -58,3 +77,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+

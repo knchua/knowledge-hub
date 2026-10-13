@@ -1,8 +1,20 @@
 """Tests for application settings."""
 
+from unittest.mock import patch
+
 from config.settings import get_settings
 
 
+TEST_SECRETS = {
+    "supabase": {
+        "url": "https://example.supabase.co",
+        "publishable_key": "test-publishable-key",
+        "secret_key": "test-secret-key",
+    }
+}
+
+
+@patch("config.settings.st.secrets", TEST_SECRETS)
 def test_default_settings(monkeypatch):
     """Application should use safe local defaults."""
 
@@ -15,7 +27,12 @@ def test_default_settings(monkeypatch):
     assert settings.environment == "local"
     assert settings.phase == "Phase 1 — Application Foundation"
 
+    assert settings.supabase_url == "https://example.supabase.co"
+    assert settings.supabase_publishable_key == "test-publishable-key"
+    assert settings.supabase_secret_key == "test-secret-key"
 
+
+@patch("config.settings.st.secrets", TEST_SECRETS)
 def test_environment_can_be_overridden(monkeypatch):
     """Application environment should support external configuration."""
 
@@ -24,3 +41,16 @@ def test_environment_can_be_overridden(monkeypatch):
     settings = get_settings()
 
     assert settings.environment == "test"
+
+@patch("config.settings.st.secrets", {})
+def test_missing_supabase_configuration_raises_error():
+    """Missing Supabase configuration should fail clearly."""
+
+    from config.settings import ConfigurationError
+
+    try:
+        get_settings()
+    except ConfigurationError as exc:
+        assert "Missing required configuration" in str(exc)
+    else:
+        raise AssertionError("ConfigurationError was not raised")
