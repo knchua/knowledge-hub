@@ -15,6 +15,7 @@ from services.authorization_service import (
     ApplicationUserContext,
     resolve_application_user,
 )
+from services.navigation_service import get_navigation_permissions
 from services.session_service import (
     clear_session,
     get_stored_tokens,
@@ -60,68 +61,100 @@ def render_login() -> None:
         st.rerun()
 
 
-def render_authenticated_app(
+def render_sidebar(
     user: ApplicationUserContext,
 ) -> None:
-    """Render the temporary authenticated application shell."""
+    """Render common authenticated-user controls."""
 
-    st.title("📚 Knowledge Hub")
-    st.caption("Phase 1 — Application Foundation")
+    with st.sidebar:
+        st.divider()
 
-    if user.display_name:
-        st.write(f"Welcome, **{user.display_name}**.")
-    else:
-        st.write(f"Signed in as **{user.email}**")
+        if user.display_name:
+            st.write(f"Signed in as **{user.display_name}**")
+        else:
+            st.write(f"Signed in as **{user.email}**")
 
-    st.success("Application access validated.")
+        st.caption(f"Role: {user.role}")
 
-    st.write(f"Current role: **{user.role}**")
+        if st.button(
+            "Sign out",
+            use_container_width=True,
+        ):
+            sign_out(
+                user.access_token,
+                user.refresh_token,
+            )
 
-    st.info(
-        "Authentication, profile validation and active-account "
-        "enforcement are enabled. Role-based navigation will be "
-        "implemented in the next milestone."
+            clear_session()
+            st.rerun()
+
+
+def build_navigation(
+    user: ApplicationUserContext,
+):
+    """Build role-aware Streamlit navigation."""
+
+    permissions = get_navigation_permissions(user)
+
+    chatbot_page = st.Page(
+        "pages/chatbot.py",
+        title="Chatbot",
+        icon="💬",
+        url_path="chatbot",
+        default=True,
     )
 
-    if st.button("Sign out"):
-        sign_out(
-            user.access_token,
-            user.refresh_token,
-        )
-
-        clear_session()
-        st.rerun()
-
-
-def main() -> None:
-    """Run the Knowledge Hub application."""
-
-    st.set_page_config(
-        page_title="Knowledge Hub",
-        page_icon="📚",
-        layout="wide",
-        initial_sidebar_state="expanded",
+    document_analysis_page = st.Page(
+        "pages/document_analysis.py",
+        title="Document Analysis",
+        icon="📄",
+        url_path="document-analysis",
     )
 
-    try:
-        get_settings()
-    except ConfigurationError:
-        st.error(
-            "Application configuration is incomplete. "
-            "Check the local Streamlit secrets configuration."
-        )
-        st.stop()
+    general_pages = [
+        chatbot_page,
+        document_analysis_page,
+    ]
 
-    if not check_database_connection():
-        st.error(
-            "Unable to connect to the application database. "
-            "Check the Supabase configuration."
+    if permissions.knowledge_management:
+        knowledge_management_page = st.Page(
+            "pages/knowledge_management.py",
+            title="Knowledge Management",
+            icon="📚",
+            url_path="knowledge-management",
         )
-        st.stop()
+
+    if permissions.user_management:
+        user_management_page = st.Page(
+            "pages/user_management.py",
+            title="User Management",
+            icon="👥",
+            url_path="user-management",
+        )
+
+    if user.role == "admin":
+        return st.navigation(
+            {
+                "Knowledge Hub": general_pages,
+                "Administration": [
+                    knowledge_management_page,
+                    user_management_page,
+                ],
+            }
+        )
+
+    return st.navigation(
+        {
+            "Knowledge Hub": general_pages,
+        }
+    )
+
+
+def resolve_current_user() -> ApplicationUserContext | None:
+    """Resolve the current authenticated application user."""
 
     if not has_stored_session():
-        render_login()
-        return
+        return None
 
     access_token, refresh_token = get_stored_tokens()
 
@@ -139,10 +172,9 @@ def main() -> None:
             "to Knowledge Hub."
         )
 
-        render_login()
-        return
+        return None
 
-
+    # Persist refreshed tokens returned during validation.
     store_session(
         AuthenticatedSession(
             user_id=user.user_id,
@@ -152,7 +184,47 @@ def main() -> None:
         )
     )
 
-    render_authenticated_app(user)
+    return user
+
+
+def main() -> None:
+    """Run the Knowledge Hub application."""
+
+    st.set_page_config(
+        page_title="Knowledge Hub",
+        page_icon="📚",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    try:
+        get_settings()
+
+    except ConfigurationError:
+        st.error(
+            "Application configuration is incomplete. "
+            "Check the local Streamlit secrets configuration."
+        )
+        st.stop()
+
+    if not check_database_connection():
+        st.error(
+            "Unable to connect to the application database. "
+            "Check the Supabase configuration."
+        )
+        st.stop()
+
+    user = resolve_current_user()
+
+    if user is None:
+        render_login()
+        return
+
+    render_sidebar(user)
+
+    navigation = build_navigation(user)
+
+    navigation.run()
 
 
 if __name__ == "__main__":
