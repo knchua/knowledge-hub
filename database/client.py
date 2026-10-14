@@ -1,4 +1,10 @@
-"""Supabase client factories for Knowledge Hub."""
+"""Supabase client factories for Knowledge Hub.
+
+Security model:
+- Normal application clients are created per use and may carry a user session.
+- The privileged admin client is server-side only and may be cached because
+  it must never carry an end-user session.
+"""
 
 from functools import lru_cache
 
@@ -8,9 +14,12 @@ from supabase.client import ClientOptions
 from config.settings import get_settings
 
 
-@lru_cache(maxsize=1)
 def get_supabase_client() -> Client:
-    """Return the normal application Supabase client."""
+    """Return a fresh normal application Supabase client.
+
+    A fresh client is created for each use so authenticated user sessions
+    are never shared through a process-wide cached client.
+    """
 
     settings = get_settings()
 
@@ -18,7 +27,7 @@ def get_supabase_client() -> Client:
         settings.supabase_url,
         settings.supabase_publishable_key,
         options=ClientOptions(
-            auto_refresh_token=True,
+            auto_refresh_token=False,
             persist_session=False,
             postgrest_client_timeout=10,
             storage_client_timeout=10,

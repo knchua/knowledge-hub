@@ -6,9 +6,8 @@ import database.client as client_module
 
 
 def setup_function():
-    """Clear cached clients before each test."""
+    """Clear the cached privileged client before each test."""
 
-    client_module.get_supabase_client.cache_clear()
     client_module.get_supabase_admin_client.cache_clear()
 
 
@@ -34,6 +33,37 @@ def test_application_client_uses_publishable_key(
 
     assert args[0] == "https://example.supabase.co"
     assert args[1] == "publishable-key"
+
+
+@patch("database.client.create_client")
+@patch("database.client.get_settings")
+def test_application_client_is_not_shared(
+    mock_get_settings,
+    mock_create_client,
+):
+    """Application clients must be created independently."""
+
+    settings = MagicMock()
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_publishable_key = "publishable-key"
+    settings.supabase_secret_key = "secret-key"
+
+    mock_get_settings.return_value = settings
+
+    first_client = MagicMock()
+    second_client = MagicMock()
+
+    mock_create_client.side_effect = [
+        first_client,
+        second_client,
+    ]
+
+    result_one = client_module.get_supabase_client()
+    result_two = client_module.get_supabase_client()
+
+    assert result_one is first_client
+    assert result_two is second_client
+    assert mock_create_client.call_count == 2
 
 
 @patch("database.client.create_client")
