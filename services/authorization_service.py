@@ -164,3 +164,25 @@ def is_admin(user: ApplicationUserContext) -> bool:
     """Return whether the current application user is an administrator."""
 
     return user.role == "admin"
+
+def require_admin(
+    user: ApplicationUserContext,
+) -> None:
+    """Require the current application user to be an administrator.
+
+    Args:
+        user: Validated application user context.
+
+    Raises:
+        ApplicationAccessError: If the user is not an active administrator.
+    """
+
+    if not user.is_active:
+        raise ApplicationAccessError(
+            "Administrator account is inactive."
+        )
+
+    if user.role != "admin":
+        raise ApplicationAccessError(
+            "Administrator privileges are required."
+        )

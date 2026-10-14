@@ -7,7 +7,9 @@ import pytest
 from services.auth_service import AuthenticatedSession
 from services.authorization_service import (
     ApplicationAccessError,
+    ApplicationUserContext,
     is_admin,
+    require_admin,
     resolve_application_user,
 )
 
@@ -238,3 +240,54 @@ def test_is_admin():
     user.role = "user"
 
     assert is_admin(user) is False
+
+def make_application_user(
+    role: str = "user",
+    is_active: bool = True,
+) -> ApplicationUserContext:
+    """Return a reusable application user context."""
+
+    return ApplicationUserContext(
+        user_id="user-123",
+        email="user@example.com",
+        display_name="Test User",
+        role=role,
+        is_active=is_active,
+        access_token="access-token",
+        refresh_token="refresh-token",
+    )
+
+
+def test_require_admin_accepts_admin():
+    """Active administrators should pass the admin guard."""
+
+    user = make_application_user(
+        role="admin",
+        is_active=True,
+    )
+
+    require_admin(user)
+
+
+def test_require_admin_rejects_normal_user():
+    """Normal users must not pass the administrator guard."""
+
+    user = make_application_user(
+        role="user",
+        is_active=True,
+    )
+
+    with pytest.raises(ApplicationAccessError):
+        require_admin(user)
+
+
+def test_require_admin_rejects_inactive_admin():
+    """Inactive administrators must not retain privileged access."""
+
+    user = make_application_user(
+        role="admin",
+        is_active=False,
+    )
+
+    with pytest.raises(ApplicationAccessError):
+        require_admin(user)
