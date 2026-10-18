@@ -1,3 +1,8 @@
 streamlit==1.65.0
 supabase==2.32.0
 pytest==9.1.1
+openai==2.6.0
+langchain-core==1.0.2
+langchain-text-splitters==1.0.0
+PyMuPDF==1.26.5
+python-docx==1.2.0
