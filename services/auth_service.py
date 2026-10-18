@@ -163,3 +163,118 @@ def sign_out(
     except Exception:
         # Local session cleanup still proceeds even if remote sign-out fails.
         pass
+
+#invite functions
+def verify_invite_token(
+    token_hash: str,
+) -> AuthenticatedSession:
+    """Verify a Supabase invitation token."""
+
+    if not token_hash:
+        raise AuthenticationError(
+            "Invitation token is missing."
+        )
+
+    client = get_supabase_client()
+
+    try:
+        response = client.auth.verify_otp(
+            {
+                "token_hash": token_hash,
+                "type": "invite",
+            }
+        )
+
+    except Exception as exc:
+        raise AuthenticationError(
+            "Invitation link is invalid or expired."
+        ) from exc
+
+    session = response.session
+    user = response.user
+
+    if session is None or user is None:
+        raise AuthenticationError(
+            "Invitation session could not be established."
+        )
+
+    return AuthenticatedSession(
+        user_id=str(user.id),
+        email=user.email or "",
+        access_token=session.access_token,
+        refresh_token=session.refresh_token,
+    )
+
+
+#recovery functions
+def verify_recovery_token(
+    token_hash: str,
+) -> AuthenticatedSession:
+    """Verify a Supabase password-recovery token."""
+
+    if not token_hash:
+        raise AuthenticationError(
+            "Password recovery token is missing."
+        )
+
+    client = get_supabase_client()
+
+    try:
+        response = client.auth.verify_otp(
+            {
+                "token_hash": token_hash,
+                "type": "recovery",
+            }
+        )
+
+    except Exception as exc:
+        raise AuthenticationError(
+            "Password recovery link is invalid or expired."
+        ) from exc
+
+    session = response.session
+    user = response.user
+
+    if session is None or user is None:
+        raise AuthenticationError(
+            "Password recovery session could not be established."
+        )
+
+    return AuthenticatedSession(
+        user_id=str(user.id),
+        email=user.email or "",
+        access_token=session.access_token,
+        refresh_token=session.refresh_token,
+    )
+
+
+def update_password(
+    access_token: str,
+    refresh_token: str,
+    new_password: str,
+) -> None:
+    """Update the password for an authenticated recovery session."""
+
+    if not new_password:
+        raise AuthenticationError(
+            "New password is required."
+        )
+
+    client = get_supabase_client()
+
+    try:
+        client.auth.set_session(
+            access_token,
+            refresh_token,
+        )
+
+        client.auth.update_user(
+            {
+                "password": new_password,
+            }
+        )
+
+    except Exception as exc:
+        raise AuthenticationError(
+            "Unable to update password."
+        ) from exc

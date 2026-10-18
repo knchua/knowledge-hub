@@ -9,6 +9,9 @@ from services.auth_service import (
     AuthenticationError,
     sign_in,
     sign_out,
+    update_password,
+    verify_recovery_token,
+    verify_invite_token,
 )
 from services.authorization_service import (
     ApplicationAccessError,
@@ -20,9 +23,12 @@ from services.session_service import (
     clear_session,
     get_stored_tokens,
     has_stored_session,
+    is_recovery_mode,
+    set_recovery_mode,
     store_session,
+    is_invite_mode,
+    set_invite_mode,
 )
-
 
 def render_login() -> None:
     """Render the Knowledge Hub login form."""
@@ -186,6 +192,212 @@ def resolve_current_user() -> ApplicationUserContext | None:
 
     return user
 
+def handle_recovery_link() -> bool:
+    """Process a Supabase password-recovery token from the URL."""
+
+    token_hash = st.query_params.get("token_hash")
+    recovery_type = st.query_params.get("type")
+
+    if not token_hash or recovery_type != "recovery":
+        return False
+
+    try:
+        session = verify_recovery_token(
+            token_hash,
+        )
+
+    except AuthenticationError:
+        st.error(
+            "This password reset link is invalid or has expired. "
+            "Please request a new password reset."
+        )
+
+        st.query_params.clear()
+        return True
+
+    store_session(session)
+    set_recovery_mode(True)
+
+    # Token hashes are one-time credentials.
+    # Remove them from the browser URL immediately after verification.
+    st.query_params.clear()
+
+    st.rerun()
+
+    return True
+
+def render_password_recovery() -> None:
+    """Render the password recovery form."""
+
+    st.title("📚 Knowledge Hub")
+    st.caption("Password Recovery")
+
+    st.subheader("Set New Password")
+
+    st.info(
+        "Enter a new password for your Knowledge Hub account."
+    )
+
+    with st.form("password_recovery_form"):
+        new_password = st.text_input(
+            "New password",
+            type="password",
+            autocomplete="new-password",
+        )
+
+        confirm_password = st.text_input(
+            "Confirm new password",
+            type="password",
+            autocomplete="new-password",
+        )
+
+        submitted = st.form_submit_button(
+            "Update Password",
+            use_container_width=True,
+        )
+
+    if submitted:
+        if len(new_password) < 8:
+            st.error(
+                "Password must contain at least 8 characters."
+            )
+            return
+
+        if new_password != confirm_password:
+            st.error("Passwords do not match.")
+            return
+
+        access_token, refresh_token = get_stored_tokens()
+
+        try:
+            update_password(
+                access_token or "",
+                refresh_token or "",
+                new_password,
+            )
+
+        except AuthenticationError:
+            st.error(
+                "Unable to update your password. "
+                "Please request a new reset link."
+            )
+            return
+
+        clear_session()
+
+        st.success(
+            "Password updated successfully. "
+            "You can now sign in using your new password."
+        )
+
+        if st.button(
+            "Return to Sign In",
+            use_container_width=True,
+        ):
+            st.rerun()
+
+def handle_invite_link() -> bool:
+    """Process a Supabase invitation token from the URL."""
+
+    token_hash = st.query_params.get("token_hash")
+    auth_type = st.query_params.get("type")
+
+    if not token_hash or auth_type != "invite":
+        return False
+
+    try:
+        session = verify_invite_token(
+            token_hash,
+        )
+
+    except AuthenticationError:
+        st.error(
+            "This invitation link is invalid or has expired. "
+            "Please ask an administrator to send a new invitation."
+        )
+
+        st.query_params.clear()
+        return True
+
+    store_session(session)
+    set_invite_mode(True)
+
+    st.query_params.clear()
+    st.rerun()
+
+    return True
+
+def render_invite_setup() -> None:
+    """Render first-time account setup after accepting an invite."""
+
+    st.title("📚 Knowledge Hub")
+    st.caption("Account Setup")
+
+    st.subheader("Create Your Password")
+
+    st.info(
+        "Your invitation has been verified. "
+        "Choose a password to complete your Knowledge Hub account."
+    )
+
+    with st.form("invite_setup_form"):
+        new_password = st.text_input(
+            "Password",
+            type="password",
+            autocomplete="new-password",
+        )
+
+        confirm_password = st.text_input(
+            "Confirm password",
+            type="password",
+            autocomplete="new-password",
+        )
+
+        submitted = st.form_submit_button(
+            "Complete Account Setup",
+            use_container_width=True,
+        )
+
+    if submitted:
+        if len(new_password) < 8:
+            st.error(
+                "Password must contain at least 8 characters."
+            )
+            return
+
+        if new_password != confirm_password:
+            st.error("Passwords do not match.")
+            return
+
+        access_token, refresh_token = get_stored_tokens()
+
+        try:
+            update_password(
+                access_token or "",
+                refresh_token or "",
+                new_password,
+            )
+
+        except AuthenticationError:
+            st.error(
+                "Unable to complete account setup. "
+                "Please request a new invitation."
+            )
+            return
+
+        clear_session()
+
+        st.success(
+            "Account setup completed successfully. "
+            "You can now sign in."
+        )
+
+        if st.button(
+            "Return to Sign In",
+            use_container_width=True,
+        ):
+            st.rerun()
+
 
 def main() -> None:
     """Run the Knowledge Hub application."""
@@ -213,6 +425,20 @@ def main() -> None:
             "Check the Supabase configuration."
         )
         st.stop()
+
+    if handle_recovery_link():
+        return
+
+    if handle_invite_link():
+        return
+
+    if is_recovery_mode():
+        render_password_recovery()
+        return
+
+    if is_invite_mode():
+        render_invite_setup()
+        return
 
     user = resolve_current_user()
 

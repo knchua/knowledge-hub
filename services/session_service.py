@@ -9,6 +9,8 @@ SESSION_ACCESS_TOKEN = "auth_access_token"
 SESSION_REFRESH_TOKEN = "auth_refresh_token"
 SESSION_USER_ID = "auth_user_id"
 SESSION_EMAIL = "auth_email"
+SESSION_RECOVERY_MODE = "auth_recovery_mode"
+SESSION_INVITE_MODE = "auth_invite_mode"
 
 
 def store_session(session: AuthenticatedSession) -> None:
@@ -28,6 +30,8 @@ def clear_session() -> None:
         SESSION_REFRESH_TOKEN,
         SESSION_USER_ID,
         SESSION_EMAIL,
+        SESSION_RECOVERY_MODE,
+        SESSION_INVITE_MODE,
     ):
         st.session_state.pop(key, None)
 
@@ -47,3 +51,31 @@ def has_stored_session() -> bool:
     access_token, refresh_token = get_stored_tokens()
 
     return bool(access_token and refresh_token)
+
+def set_recovery_mode(enabled: bool) -> None:
+    """Set whether the current session is performing password recovery."""
+
+    st.session_state[SESSION_RECOVERY_MODE] = enabled
+
+
+def is_recovery_mode() -> bool:
+    """Return whether password recovery is active."""
+
+    return st.session_state.get(
+        SESSION_RECOVERY_MODE,
+        False,
+    )
+
+def set_invite_mode(enabled: bool) -> None:
+    """Set whether the session is completing an invitation."""
+
+    st.session_state[SESSION_INVITE_MODE] = enabled
+
+
+def is_invite_mode() -> bool:
+    """Return whether invitation setup is active."""
+
+    return st.session_state.get(
+        SESSION_INVITE_MODE,
+        False,
+    )

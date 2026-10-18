@@ -10,7 +10,10 @@ TEST_SECRETS = {
         "url": "https://example.supabase.co",
         "publishable_key": "test-publishable-key",
         "secret_key": "test-secret-key",
-    }
+    },
+    "app": {
+        "base_url": "http://localhost:8501",
+    },
 }
 
 
@@ -30,6 +33,7 @@ def test_default_settings(monkeypatch):
     assert settings.supabase_url == "https://example.supabase.co"
     assert settings.supabase_publishable_key == "test-publishable-key"
     assert settings.supabase_secret_key == "test-secret-key"
+    assert settings.base_url == "http://localhost:8501"
 
 
 @patch("config.settings.st.secrets", TEST_SECRETS)

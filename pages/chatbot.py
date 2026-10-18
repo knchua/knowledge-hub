@@ -1,21 +1,26 @@
-"""Chatbot placeholder page."""
+"""Knowledge Hub Chatbot placeholder."""
 
 import streamlit as st
 
 
-st.title("💬 Chatbot")
+st.title("💬 Knowledge Hub Chatbot")
 
 st.info(
-    "The document-grounded Knowledge Hub chatbot will be implemented "
-    "in a later phase."
+    "This feature will be implemented in a later phase."
 )
 
-st.write(
+st.markdown(
     """
-    This Phase 1 page confirms that authenticated users can access
-    the future chatbot area.
+    The future chatbot will provide document-grounded answers based on
+    the Knowledge Hub knowledge base.
 
-    No RAG, embeddings, vector search, LLM response generation or
-    document citations are implemented in Phase 1.
+    Planned later-phase capabilities include:
+
+    - retrieval from approved knowledge documents
+    - grounded AI answers
+    - document references and citations
+    - conversational knowledge access
+
+    **No RAG, vector search or LLM response generation is active yet.**
     """
 )

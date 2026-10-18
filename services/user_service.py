@@ -3,12 +3,18 @@
 from dataclasses import dataclass
 from typing import Any
 
-from database.client import get_supabase_admin_client
+#from database.client import get_supabase_admin_client
+from database.client import (
+    get_supabase_admin_client,
+    get_supabase_client,
+)
+
 from services.audit_service import write_audit_log
 from services.authorization_service import (
     ApplicationUserContext,
     require_admin,
 )
+from config.settings import get_settings
 
 
 VALID_ROLES = {"admin", "user"}
@@ -137,7 +143,13 @@ def invite_user(
     client = _admin_client()
 
     try:
-        response = client.auth.admin.invite_user_by_email(email)
+        #response = client.auth.admin.invite_user_by_email(email)
+        response = client.auth.admin.invite_user_by_email(
+            email,
+            {
+                "redirect_to": get_settings().base_url,
+            }
+        )
         invited_user = response.user
 
         if invited_user is None:
@@ -323,4 +335,109 @@ def set_user_active_status(
     except Exception as exc:
         raise UserAdministrationError(
             "Unable to change user active status."
+        ) from exc
+
+###
+def send_password_reset(
+    actor: ApplicationUserContext,
+    target_user_id: str,
+    email: str,
+) -> None:
+    """Send a password reset email to a Knowledge Hub user."""
+
+    require_admin(actor)
+
+    email = email.strip().lower()
+
+    if not email:
+        raise UserAdministrationError(
+            "Target user email is required."
+        )
+
+    client = get_supabase_client()
+
+    try:
+        client.auth.reset_password_for_email(
+            email,
+            {
+                "redirect_to": get_settings().base_url,
+            },
+        )
+
+        write_audit_log(
+            actor_user_id=actor.user_id,
+            action="user_password_reset_requested",
+            target_user_id=target_user_id,
+            details={
+                "method": "recovery_email",
+            },
+        )
+
+    except Exception as exc:
+        raise UserAdministrationError(
+            "Unable to send password reset email."
+        ) from exc
+
+
+def delete_user(
+    actor: ApplicationUserContext,
+    target_user_id: str,
+) -> None:
+    """Permanently delete a Knowledge Hub user.
+
+    Deleting auth.users cascades to public.profiles according to the
+    Phase 1 database schema.
+    """
+
+    require_admin(actor)
+
+    if target_user_id == actor.user_id:
+        raise UserAdministrationError(
+            "Administrators cannot delete their own account."
+        )
+
+    client = _admin_client()
+
+    try:
+        current = (
+            client
+            .table("profiles")
+            .select("role, is_active")
+            .eq("user_id", target_user_id)
+            .limit(1)
+            .execute()
+        )
+
+        rows = current.data or []
+
+        if len(rows) != 1:
+            raise UserAdministrationError(
+                "Target user profile was not found."
+            )
+
+        target_role = rows[0]["role"]
+        target_is_active = rows[0]["is_active"] is True
+
+        # Write before deletion. Because audit_logs.target_user_id uses
+        # ON DELETE SET NULL, preserve the deleted UUID in details.
+        write_audit_log(
+            actor_user_id=actor.user_id,
+            action="user_deleted",
+            target_user_id=target_user_id,
+            details={
+                "deleted_user_id": target_user_id,
+                "previous_role": target_role,
+                "previous_is_active": target_is_active,
+            },
+        )
+
+        client.auth.admin.delete_user(
+            target_user_id,
+        )
+
+    except UserAdministrationError:
+        raise
+    except Exception as exc:
+        raise UserAdministrationError(
+            "Unable to delete user."
         ) from exc

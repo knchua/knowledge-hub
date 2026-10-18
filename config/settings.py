@@ -24,6 +24,7 @@ class AppSettings:
     supabase_url: str
     supabase_publishable_key: str
     supabase_secret_key: str
+    base_url: str
 
 
 def _get_required_secret(section: str, key: str) -> str:
@@ -71,5 +72,9 @@ def get_settings() -> AppSettings:
         supabase_secret_key=_get_required_secret(
             "supabase",
             "secret_key",
+        ),
+        base_url=_get_required_secret(
+            "app",
+            "base_url",
         ),
     )

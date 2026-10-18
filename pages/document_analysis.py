@@ -1,21 +1,25 @@
-"""Document Analysis placeholder page."""
+"""Administrator Knowledge Management placeholder."""
 
 import streamlit as st
 
 
-st.title("📄 Document Analysis")
+st.title("📚 Knowledge Management")
+st.caption("Administrator access only")
 
 st.info(
-    "User document summarisation and analysis will be implemented "
+    "Knowledge-base document administration will be implemented "
     "in a later phase."
 )
 
-st.write(
+st.markdown(
     """
-    This Phase 1 page confirms that authenticated users can access
-    the future document analysis area.
+    Planned capabilities include:
 
-    File upload, document parsing, summarisation and AI analysis are
-    not implemented in Phase 1.
+    - upload approved knowledge documents
+    - replace existing knowledge documents
+    - delete knowledge documents
+    - manage document ingestion and indexing
+
+    **No knowledge documents can currently be uploaded or modified.**
     """
 )

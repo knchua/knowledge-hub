@@ -8,6 +8,8 @@ from services.auth_service import (
     AuthenticationError,
     restore_session,
     sign_in,
+    update_password,
+    verify_recovery_token,
 )
 
 
@@ -124,3 +126,90 @@ def test_restore_session_returns_none_when_invalid(mock_get_client):
     )
 
     assert result is None
+
+@patch("services.auth_service.get_supabase_client")
+def test_verify_recovery_token_returns_session(mock_get_client):
+    """Valid recovery token should establish an authenticated session."""
+
+    client = MagicMock()
+
+    session = MagicMock()
+    session.access_token = "access-token"
+    session.refresh_token = "refresh-token"
+
+    user = MagicMock()
+    user.id = "user-123"
+    user.email = "user@example.com"
+
+    response = MagicMock()
+    response.session = session
+    response.user = user
+
+    client.auth.verify_otp.return_value = response
+    mock_get_client.return_value = client
+
+    result = verify_recovery_token("token-hash")
+
+    assert result.user_id == "user-123"
+    assert result.email == "user@example.com"
+    assert result.access_token == "access-token"
+    assert result.refresh_token == "refresh-token"
+
+    client.auth.verify_otp.assert_called_once_with(
+        {
+            "token_hash": "token-hash",
+            "type": "recovery",
+        }
+    )
+
+
+@patch("services.auth_service.get_supabase_client")
+def test_invalid_recovery_token_is_rejected(mock_get_client):
+    """Invalid recovery links should fail safely."""
+
+    client = MagicMock()
+
+    client.auth.verify_otp.side_effect = RuntimeError(
+        "invalid token"
+    )
+
+    mock_get_client.return_value = client
+
+    with pytest.raises(AuthenticationError):
+        verify_recovery_token("invalid-token")
+
+
+@patch("services.auth_service.get_supabase_client")
+def test_update_password(mock_get_client):
+    """Password update should use the authenticated recovery session."""
+
+    client = MagicMock()
+    mock_get_client.return_value = client
+
+    update_password(
+        "access-token",
+        "refresh-token",
+        "new-password-123",
+    )
+
+    client.auth.set_session.assert_called_once_with(
+        "access-token",
+        "refresh-token",
+    )
+
+    client.auth.update_user.assert_called_once_with(
+        {
+            "password": "new-password-123",
+        }
+    )
+
+
+def test_update_password_requires_value():
+    """Blank password must be rejected."""
+
+    with pytest.raises(AuthenticationError):
+        update_password(
+            "access-token",
+            "refresh-token",
+            "",
+        )
