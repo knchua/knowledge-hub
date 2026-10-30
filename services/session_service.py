@@ -32,6 +32,9 @@ def clear_session() -> None:
         SESSION_EMAIL,
         SESSION_RECOVERY_MODE,
         SESSION_INVITE_MODE,
+        # Phase 3 conversation state must not survive logout or invalidation.
+        "phase3_chat_owner",
+        "phase3_chat_turns",
     ):
         st.session_state.pop(key, None)
 
