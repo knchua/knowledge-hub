@@ -69,3 +69,14 @@ def claim_replacement_version(client, document_id: str, version_id: str) -> dict
     if len(rows) != 1:
         raise ValueError("Replacement cannot be claimed.")
     return rows[0]
+
+
+def claim_failed_replacement_version(client, document_id: str, version_id: str) -> dict:
+    """Claim a failed replacement in the database, serialised by the document lock."""
+    response = client.rpc("claim_failed_knowledge_replacement", {
+        "p_document_id": document_id, "p_version_id": version_id,
+    }).execute()
+    rows = response.data or []
+    if len(rows) != 1:
+        raise ValueError("Failed replacement could not be claimed.")
+    return rows[0]

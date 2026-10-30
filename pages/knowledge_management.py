@@ -71,7 +71,7 @@ from services.knowledge_lifecycle_service import (
     stage_replacement, delete_document, cleanup_version,
     list_pending_cleanup, finish_deletion,
 )
-from services.knowledge_ingestion_service import process_replacement
+from services.knowledge_ingestion_service import process_replacement, retry_failed_replacement
 
 st.subheader("Document lifecycle management")
 st.caption("Replacement keeps the active version online until a new version is successfully indexed.")
@@ -100,6 +100,15 @@ try:
                                 with st.spinner("Processing replacement…"):
                                     process_replacement(actor,d['id'],v['id'])
                                 st.success("Replacement activated. Previous version is now superseded.")
+                                st.rerun()
+                            except KnowledgeError as exc:
+                                st.error(str(exc))
+                    if v['version_number'] > 1 and v['status'] == 'failed':
+                        if st.button(f"Retry failed replacement v{v['version_number']}", key=f"replace_retry_{v['id']}"):
+                            try:
+                                with st.spinner("Retrying replacement indexing…"):
+                                    retry_failed_replacement(actor, d['id'], v['id'])
+                                st.success("Replacement successfully indexed and activated.")
                                 st.rerun()
                             except KnowledgeError as exc:
                                 st.error(str(exc))

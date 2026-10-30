@@ -6,7 +6,7 @@ import uuid
 
 from database.client import get_supabase_admin_client
 from database.knowledge_repository import (
-    activate, claim_failed_version, claim_replacement_version, fail, fetch_pending_version, replace_chunks,
+    activate, claim_failed_version, claim_replacement_version, claim_failed_replacement_version, fail, fetch_pending_version, replace_chunks,
 )
 from services.audit_service import write_audit_log
 from services.embedding_service import embed_texts
@@ -101,3 +101,15 @@ def process_replacement(actor, document_id: str, version_id: str) -> int:
         raise KnowledgeError("Replacement is unavailable or already being processed.") from exc
     # Existing run logic will preserve a ready document when candidate fails.
     return _run_ingestion(client, admin, document_id, version_id, version, is_retry=False)
+
+
+def retry_failed_replacement(actor, document_id: str, version_id: str) -> int:
+    """Retry failed replacement; preserve currently active ready version."""
+    admin = _fresh_admin(actor)
+    _ids(document_id, version_id)
+    client = get_supabase_admin_client()
+    try:
+        version = claim_failed_replacement_version(client, document_id, version_id)
+    except Exception as exc:
+        raise KnowledgeError("Replacement retry unavailable or already claimed.") from exc
+    return _run_ingestion(client, admin, document_id, version_id, version, is_retry=True)
