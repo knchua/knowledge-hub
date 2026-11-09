@@ -25,7 +25,12 @@ def test_loaded_document_controls_above_summarisation():
 def test_form_and_clear_button_are_together():
     helper = _function('_render_document_controls')
     calls = [n.func.attr for n in ast.walk(helper) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
-    assert 'form' in calls and 'file_uploader' in calls and 'form_submit_button' in calls and 'button' in calls
+    # Phase 4 F-07 uses a standard uploader plus explicit submit/clear buttons,
+    # rather than the original Streamlit form. Verify the intended controls.
+    assert 'file_uploader' in calls
+    assert calls.count('button') >= 2
+    labels = {node.value for node in ast.walk(helper) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    assert {'Upload Document', 'Replace Document', 'Clear Document'} <= labels
     assert 'clear_document' in [n.func.id for n in ast.walk(helper) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
 
 def test_chat_and_summary_remain_present():

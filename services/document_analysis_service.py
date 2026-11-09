@@ -53,15 +53,19 @@ def verify_actor(actor: ApplicationUserContext) -> ApplicationUserContext:
 
 
 def replace_document(state: MutableMapping, actor: ApplicationUserContext, filename: str, data: bytes) -> TemporaryDocument:
-    """Fail closed: remove any previous document before parsing replacement."""
+    """Authenticate first, then parse; commit replacement only on success.
+
+    Rejected files leave the previous authorised document intact. Authentication
+    failure still clears session document state through the existing handler.
+    """
     try:
         current = verify_actor(actor)
     except DocumentAccessError:
         clear_document(state, keep_owner=False)
         raise
     bind_owner(state, current.user_id)
-    clear_document(state)
     document = parse_temporary_document(current.user_id, filename, data)
+    clear_document(state)
     state[DOCUMENT] = document
     return document
 

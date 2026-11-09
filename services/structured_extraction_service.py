@@ -223,10 +223,8 @@ def project_structured_summary(draft: str, document) -> str:
         sections.append("\n## Delivery Metrics (Source Evidence)")
         for statement, segment_index in register.delivery_metrics:
             sections.append(f"- {statement} [P{segment_index+1}]")
-    sections.append("\n## Missing/Unclear Information")
     if register.unresolved:
+        sections.append("\n## Missing/Unclear Information")
         for line, segment_index in register.unresolved:
             sections.append(f"- {line} [P{segment_index+1}]")
-    else:
-        sections.append("No explicitly unresolved items were reliably extracted.")
     return "\n\n".join(sections).strip()

@@ -117,7 +117,7 @@ def parse_temporary_document(owner_user_id: str, filename: str, data: bytes) -> 
         raise TemporaryDocumentError("Unable to extract text from this document.") from exc
 
     if not sources:
-        raise TemporaryDocumentError("No readable text found. Scanned PDFs require OCR, which is not supported.")
+        raise TemporaryDocumentError("No readable text was found in the document. Scanned PDFs and images embedded in Word documents are not currently supported. Please upload a text-based document.")
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=segment_size, chunk_overlap=overlap)
     segments: list[TemporarySegment] = []

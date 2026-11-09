@@ -20,13 +20,14 @@ from services.document_qa_service import DocumentQAError
 def _render_document_controls(user, document) -> None:
     """Keep upload/replace and clear controls immediately below document details."""
     generation = st.session_state.get(WIDGET_VERSION, 0)
-    with st.form(f"phase4_upload_form_{generation}"):
-        uploaded = st.file_uploader(
-            "Choose document" if document is None else "Choose replacement document",
-            type=["pdf", "docx", "txt"],
-            key=f"phase4_upload_{generation}",
-        )
-        submit = st.form_submit_button("Upload Document" if document is None else "Replace Document")
+    # Keep the uploader outside a form so the selection is available before
+    # a replacement click. A new generation key resets it after a successful swap.
+    uploaded = st.file_uploader(
+        "Choose document" if document is None else "Choose replacement document",
+        type=["pdf", "docx", "txt"],
+        key=f"phase4_upload_{generation}",
+    )
+    submit = st.button("Upload Document" if document is None else "Replace Document")
 
     if submit:
         if uploaded is None:
@@ -41,7 +42,7 @@ def _render_document_controls(user, document) -> None:
         except (TemporaryDocumentError, DocumentAccessError) as exc:
             st.error(str(exc))
         except Exception:
-            clear_document(st.session_state)
+            # A rejected replacement must not discard a previously valid file.
             st.error("Unable to process this document.")
         else:
             st.success(f"Loaded {result.filename} ({len(result.segments)} segments).")
