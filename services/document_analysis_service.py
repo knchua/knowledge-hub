@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import MutableMapping
 from services.authorization_service import ApplicationAccessError, ApplicationUserContext, resolve_application_user
 from services.temporary_document_service import TemporaryDocument, parse_temporary_document
+# Phase 5 state is session-only; no persistent data keys.
 
 OWNER = "phase4_owner"
 DOCUMENT = "phase4_document"
@@ -19,8 +20,10 @@ class DocumentAccessError(RuntimeError):
 
 def clear_document(state: MutableMapping, *, keep_owner: bool = True) -> None:
     """Drop document references, derived state and current uploader widget state."""
-    for key in (DOCUMENT, RESULTS, QA_HISTORY, UPLOAD, "phase4_summary_mode"):
+    for key in (DOCUMENT, RESULTS, QA_HISTORY, UPLOAD, "phase4_summary_mode", "phase5_visual_pending"):
         state.pop(key, None)
+    # R6.5-B: eagerly discard the isolated, non-user-facing fact-first preview.
+    state.pop("phase5_r64b_offline_derived_preview", None)
     # Do not mutate an instantiated Streamlit uploader widget key here.
     # The version change below stops rendering it on the next rerun.
     # A fresh widget key prevents Streamlit from reusing the previous upload.

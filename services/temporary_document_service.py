@@ -31,6 +31,12 @@ class TemporarySegment:
     index: int
     text: str
     page_number: int | None
+    # Phase 5: optional provenance. Defaults preserve every Phase 4 caller.
+    origin: str = "native_text"  # native_text, ocr_text, vision_description
+    image_id: str | None = None  # M2.2 trusted source ID; never a citation label
+    docx_image_ordinal: int | None = None  # 1-based occurrence, not Word page
+    docx_body_block: int | None = None  # 1-based structural position
+    extraction_warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

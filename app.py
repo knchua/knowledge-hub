@@ -139,15 +139,24 @@ def build_navigation(
         )
 
     if user.role == "admin":
-        return st.navigation(
-            {
-                "Knowledge Hub": general_pages,
-                "Administration": [
-                    knowledge_management_page,
-                    user_management_page,
-                ],
-            }
-        )
+        groups = {
+            "Knowledge Hub": general_pages,
+            "Administration": [
+                knowledge_management_page,
+                user_management_page,
+            ],
+        }
+        # R6.5-E: only registered for an explicitly allowlisted, verified
+        # developer admin. The page independently verifies direct URL access.
+        from services.developer_diagnostics_navigation_service import developer_navigation_allowed
+        if developer_navigation_allowed(user):
+            groups["Developer Tools"] = [st.Page(
+                "pages/developer_diagnostics.py",
+                title="Synthetic Diagnostics",
+                icon="🧪",
+                url_path="developer-diagnostics",
+            )]
+        return st.navigation(groups)
 
     return st.navigation(
         {

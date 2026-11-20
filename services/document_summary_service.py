@@ -7,6 +7,7 @@ from services.document_analysis_service import (
 )
 from services.authorization_service import ApplicationUserContext
 from services.summarisation_service import DocumentSummary, generate_summary
+from services.phase5_gate2_budget_service import operation, Gate2BudgetError
 
 
 def summarise_current_document(state: MutableMapping, actor: ApplicationUserContext,
@@ -33,7 +34,12 @@ def summarise_current_document(state: MutableMapping, actor: ApplicationUserCont
     else:
         state.pop(RESULTS, None)
 
-    summary = generate_summary(document, mode)
+    try:
+        with operation(state, user.user_id):
+            summary = generate_summary(document, mode)
+    except Gate2BudgetError as exc:
+        from services.summarisation_service import SummarisationError
+        raise SummarisationError(str(exc)) from exc
     refreshed = current_document(state, actor)
     if refreshed is not document:
         raise DocumentAccessError("The document changed during processing. Discarding the result.")

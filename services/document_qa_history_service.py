@@ -11,6 +11,7 @@ from typing import MutableMapping
 
 from services.document_analysis_service import QA_HISTORY, current_document, DocumentAccessError
 from services.document_qa_service import DocumentAnswer, DocumentQAError, answer_document_question
+from services.phase5_gate2_budget_service import operation, Gate2BudgetError
 
 HISTORY_LIMIT = 8
 _CONTEXT_ID = re.compile(r"\b(?:A|R|D)-\d{2,4}\b", re.IGNORECASE)
@@ -84,7 +85,11 @@ def ask_and_record(state: MutableMapping, actor, question: str) -> DocumentAnswe
     normalized = question.strip()
     # The underlying selector remains the authority for the configured limit.
     effective = _effective_question(normalized, history)
-    answer = answer_document_question(state, actor, effective)
+    try:
+        with operation(state, doc.owner_user_id):
+            answer = answer_document_question(state, actor, effective)
+    except Gate2BudgetError as exc:
+        raise DocumentQAError(str(exc)) from exc
     # Revalidate after network/model call: don't attach answer to a changed document.
     latest = _active(state, actor)
     if latest is None or latest.document_id != doc.document_id or answer.document_id != doc.document_id:

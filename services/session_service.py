@@ -17,6 +17,11 @@ def store_session(session: AuthenticatedSession) -> None:
     if st.session_state.get(SESSION_USER_ID) not in (None, session.user_id):
         from services.document_analysis_service import clear_document
         clear_document(st.session_state, keep_owner=False)
+    # A different authenticated user cannot inherit a visual consent widget.
+    if st.session_state.get(SESSION_USER_ID) not in (None, session.user_id):
+        for key in list(st.session_state.keys()):
+            if key.startswith("phase5_"):
+                st.session_state.pop(key, None)
     st.session_state[SESSION_ACCESS_TOKEN] = session.access_token
     st.session_state[SESSION_REFRESH_TOKEN] = session.refresh_token
     st.session_state[SESSION_USER_ID] = session.user_id
@@ -29,7 +34,7 @@ def clear_session() -> None:
     clear_document(st.session_state, keep_owner=False)
     # Clear any Phase 4 state introduced in future milestones, without touching other features.
     for key in list(st.session_state.keys()):
-        if key.startswith("phase4_"):
+        if key.startswith(("phase4_", "phase5_")):
             st.session_state.pop(key, None)
     for key in (
         SESSION_ACCESS_TOKEN,

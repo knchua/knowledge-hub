@@ -15,39 +15,101 @@ from services.summary_render_service import escape_markdown_currency
 from services.document_analysis_service import RESULTS
 from services.document_qa_history_service import ask_and_record, read_qa_history, clear_qa_history
 from services.document_qa_service import DocumentQAError
+from services.phase5_visual_session_service import (
+    PENDING, discard_visual_attempt, prepare_visual_attempt,
+    replace_visual_document, visual_attempt_matches, configured_vision_budget,
+)
+from services.visual_extraction_manifest_service import VisualManifestError
+from services.visual_document_processing_service import VisualProcessingError
+
+
+def _invalidate_visual_attempt() -> None:
+    # A changed uploader selection revokes consent to the previous selected file.
+    discard_visual_attempt(st.session_state)
 
 
 def _render_document_controls(user, document) -> None:
-    """Keep upload/replace and clear controls immediately below document details."""
+    """Preserve the legacy native-text upload and add explicit visual consent."""
     generation = st.session_state.get(WIDGET_VERSION, 0)
-    # Keep the uploader outside a form so the selection is available before
-    # a replacement click. A new generation key resets it after a successful swap.
     uploaded = st.file_uploader(
         "Choose document" if document is None else "Choose replacement document",
         type=["pdf", "docx", "txt"],
         key=f"phase4_upload_{generation}",
+        on_change=_invalidate_visual_attempt,
     )
     submit = st.button("Upload Document" if document is None else "Replace Document")
-
     if submit:
         if uploaded is None:
             st.warning("Select a document first.")
             return
         try:
-            # Protect from a deliberately oversized upload even if deployment limits drift.
             if uploaded.size > 20 * 1024 * 1024:
                 raise TemporaryDocumentError("File exceeds the 20 MB upload limit.")
-            with st.spinner("Validating and extracting text…"):
-                result = replace_document(st.session_state, user, uploaded.name, uploaded.getvalue())
-        except (TemporaryDocumentError, DocumentAccessError) as exc:
+            raw = uploaded.getvalue()
+            with st.spinner("Inspecting document locally…"):
+                manifest = prepare_visual_attempt(st.session_state, user, uploaded.name, raw)
+            if not manifest.consent_required:
+                # Preserve the Phase 4 service call and its static regression test.
+                with st.spinner("Validating and extracting text…"):
+                    result = replace_document(st.session_state, user, uploaded.name, uploaded.getvalue())
+                st.success(f"Loaded {result.filename} ({len(result.segments)} segments).")
+                st.rerun()
+        except (TemporaryDocumentError, DocumentAccessError, VisualManifestError) as exc:
             st.error(str(exc))
         except Exception:
-            # A rejected replacement must not discard a previously valid file.
-            st.error("Unable to process this document.")
-        else:
-            st.success(f"Loaded {result.filename} ({len(result.segments)} segments).")
-            st.rerun()
+            st.error("Unable to inspect or process this document.")
 
+    pending = st.session_state.get(PENDING)
+    if uploaded is not None and pending is not None:
+        try:
+            raw = uploaded.getvalue()
+            if not visual_attempt_matches(st.session_state, uploaded.name, raw):
+                discard_visual_attempt(st.session_state)
+                st.warning("Selected file changed. Inspect it again before consent.")
+                return
+            manifest = pending["manifest"]
+            if pending.get("owner") != user.user_id:
+                discard_visual_attempt(st.session_state)
+                st.error("Visual processing consent has expired.")
+                return
+            try:
+                budget_preview = configured_vision_budget(manifest.proposed_vision_calls)
+            except DocumentAccessError as exc:
+                st.error(str(exc))
+                st.info("Configure and verify KH_VISION_MAX_ESTIMATED_USD and both price settings before processing.")
+            else:
+                reserved = budget_preview.next_reservation_usd * manifest.proposed_vision_calls
+                st.info(f"Visual content detected: {manifest.proposed_vision_calls} image/page(s). "
+                        f"Estimated preflight reservation: USD {reserved:.4f}; "
+                        f"configured per-document estimate limit: USD {budget_preview.max_estimated_usd:.4f}. "
+                        "Actual provider charges can exceed estimates.")
+                for candidate in manifest.candidates:
+                    location = (f"PDF page {candidate.pdf_page}" if candidate.pdf_page is not None
+                                else f"Word image {candidate.docx_image_ordinal}, body block {candidate.docx_body_block}")
+                    st.caption(f"{location} — {candidate.reason}")
+                st.warning("Document images will be transmitted to OpenAI for OCR and visual description. "
+                           "Provider retention is governed by OpenAI's terms; local clearing does not "
+                           "guarantee provider-side deletion. Use synthetic/non-sensitive files.")
+                consent = st.checkbox(
+                    "I explicitly consent to send images from THIS selected document to OpenAI.",
+                    value=False, key=f"phase5_consent_{pending['nonce']}",
+                )
+                if st.button("Process Document with AI Vision", disabled=not consent,
+                             key=f"phase5_process_{pending['nonce']}"):
+                    try:
+                        with st.spinner("Extracting visual evidence securely…"):
+                            result = replace_visual_document(
+                                st.session_state, user, uploaded.name, raw, consent=consent)
+                        st.success(f"Loaded {result.filename} ({len(result.segments)} segments).")
+                        st.rerun()
+                    except (DocumentAccessError, VisualProcessingError) as exc:
+                        st.error(str(exc))
+                    except Exception:
+                        st.error("Unable to complete visual processing safely.")
+        except Exception:
+            # Avoid displaying stale consent or leaking any uploaded data.
+            discard_visual_attempt(st.session_state)
+            st.error("Unable to display the visual processing preview safely.")
 
     if document is not None and st.button("Clear Document", type="secondary"):
         clear_document(st.session_state)
@@ -56,8 +118,8 @@ def _render_document_controls(user, document) -> None:
 
 def main() -> None:
     st.title("📄 Document Analysis")
-    st.caption("Phase 4 — Temporary document upload and extraction")
-    st.info("Uploaded document text will be sent to OpenAI when AI analysis is enabled in later milestones. "
+    st.caption("Phase 5 — Temporary document analysis with optional visual extraction")
+    st.info("Native document excerpts are sent to OpenAI only for requested summary/Q&A. Document images are sent only after explicit consent. "
             "Use synthetic or non-sensitive documents for this bootcamp. Documents are not added to the shared knowledge repository.")
 
     access, refresh = get_stored_tokens()
@@ -119,7 +181,12 @@ def main() -> None:
             for idx in result.source_segments:
                 segment = document.segments[idx]
                 with st.expander(f"[P{idx + 1}] " +
-                                 (f"PDF page {segment.page_number}" if segment.page_number else f"Segment {idx + 1}")):
+                                 (f"PDF page {segment.page_number}" if segment.page_number else
+                                  (f"Word image {segment.docx_image_ordinal} (block {segment.docx_body_block})"
+                                   if segment.docx_image_ordinal else f"Segment {idx + 1}"))):
+                    st.caption(f"Extraction source: {segment.origin}" + (f" · Word image {segment.docx_image_ordinal}" if segment.docx_image_ordinal else ""))
+                    for warning in segment.extraction_warnings:
+                        st.warning(warning)
                     st.text(segment.text[:500])
         st.divider()
         st.subheader("Chat with this document")
@@ -145,9 +212,16 @@ def main() -> None:
                     st.caption("Insufficient evidence in this uploaded document.")
                 else:
                     for item in turn.answer.cited_evidence:
+                        source_segment = document.segments[item.index]
                         location = (f"PDF page {item.page_number}"
-                                    if item.page_number is not None else f"Segment {item.index + 1}")
+                                    if item.page_number is not None else
+                                    (f"Word image {source_segment.docx_image_ordinal} "
+                                     f"(block {source_segment.docx_body_block})"
+                                     if source_segment.docx_image_ordinal else f"Segment {item.index + 1}"))
                         with st.expander(f"[{item.label}] — {location}"):
+                            st.caption(f"Extraction source: {source_segment.origin}")
+                            for warning in source_segment.extraction_warnings:
+                                st.warning(warning)
                             st.text(item.text)
 
         # Give this widget a fresh identity when the uploaded document changes.
