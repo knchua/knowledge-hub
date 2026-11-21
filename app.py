@@ -122,6 +122,21 @@ def build_navigation(
         document_analysis_page,
     ]
 
+    information_pages = [
+        st.Page(
+            "pages/about_us.py",
+            title="About Us",
+            icon="ℹ️",
+            url_path="about-us",
+        ),
+        st.Page(
+            "pages/methodology.py",
+            title="Methodology",
+            icon="🧭",
+            url_path="methodology",
+        ),
+    ]
+
     if permissions.knowledge_management:
         knowledge_management_page = st.Page(
             "pages/knowledge_management.py",
@@ -141,6 +156,7 @@ def build_navigation(
     if user.role == "admin":
         groups = {
             "Knowledge Hub": general_pages,
+            "Information": information_pages,
             "Administration": [
                 knowledge_management_page,
                 user_management_page,
@@ -161,6 +177,7 @@ def build_navigation(
     return st.navigation(
         {
             "Knowledge Hub": general_pages,
+            "Information": information_pages,
         }
     )
 
