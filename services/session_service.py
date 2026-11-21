@@ -45,6 +45,8 @@ def clear_session() -> None:
         SESSION_INVITE_MODE,
         "phase3_chat_owner",
         "phase3_chat_turns",
+        "p3_reauthentication_required",
+        "p3_reauthentication_owner",
     ):
         st.session_state.pop(key, None)
 

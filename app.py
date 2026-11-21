@@ -137,6 +137,15 @@ def build_navigation(
         ),
     ]
 
+    account_pages = [
+        st.Page(
+            "pages/my_profile.py",
+            title="My Profile",
+            icon="👤",
+            url_path="my-profile",
+        ),
+    ]
+
     if permissions.knowledge_management:
         knowledge_management_page = st.Page(
             "pages/knowledge_management.py",
@@ -157,6 +166,7 @@ def build_navigation(
         groups = {
             "Knowledge Hub": general_pages,
             "Information": information_pages,
+            "Account": account_pages,
             "Administration": [
                 knowledge_management_page,
                 user_management_page,
@@ -178,6 +188,7 @@ def build_navigation(
         {
             "Knowledge Hub": general_pages,
             "Information": information_pages,
+            "Account": account_pages,
         }
     )
 
