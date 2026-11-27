@@ -121,15 +121,22 @@ try:
                             except KnowledgeError as exc:
                                 st.error(str(exc))
                 with st.form(f"delete_{d['id']}"):
-                    confirmation = st.text_input('Type DELETE to permanently remove this document',key=f"confirm_{d['id']}")
-                    request_delete = st.form_submit_button("Delete document",disabled=confirmation!='DELETE')
+                    confirmation = st.text_input(
+                        "Type DELETE to permanently remove this document",
+                        key=f"confirm_{d['id']}",
+                    )
+                    request_delete = st.form_submit_button("Delete document")
+
                 if request_delete:
-                    try:
-                        delete_document(actor,d['id'],confirmation)
-                        st.success("Document deleted and cleanup completed.")
-                        st.rerun()
-                    except KnowledgeError as exc:
-                        st.error(str(exc))
+                    if confirmation != "DELETE":
+                        st.error("Type DELETE exactly to confirm deletion.")
+                    else:
+                        try:
+                            delete_document(actor, d["id"], confirmation)
+                            st.success("Document deleted and cleanup completed.")
+                            st.rerun()
+                        except KnowledgeError as exc:
+                            st.error(str(exc))
             else:
                 st.caption("Lifecycle actions require a ready active document.")
     st.subheader("Interrupted deletion cleanup")
