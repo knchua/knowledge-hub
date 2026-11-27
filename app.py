@@ -34,7 +34,6 @@ def render_login() -> None:
     """Render the Knowledge Hub login form."""
 
     st.title("📚 Knowledge Hub")
-    st.caption("Phase 1 — Application Foundation")
 
     st.subheader("Sign in")
 
